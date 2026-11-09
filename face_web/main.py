@@ -24,11 +24,20 @@ PHOTOS_DIR = os.path.join(DATA_DIR, "photos")
 app = FastAPI(title="人脸考勤系统 API", version="1.0.0")
 
 # 允许前端跨域访问（Vue dev server 默认 5173 端口）
+# 默认只放行本机 dev server；换域名/端口时用环境变量覆盖，逗号分隔
+ALLOW_ORIGINS = [
+    o.strip()
+    for o in os.getenv(
+        "ALLOW_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173"
+    ).split(",")
+    if o.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_origins=ALLOW_ORIGINS,
+    # 接口不依赖 Cookie/凭据；开着 credentials 又配 "*" 属于无效且危险的组合
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["*"],
 )
 
@@ -185,11 +194,28 @@ def list_photos(person_id: int):
         conn.close()
 
 
+def _safe_photo_path(rel_path: str) -> str:
+    """把请求里的相对路径归一化，保证结果仍落在 PHOTOS_DIR 内。
+
+    直接用 os.path.join 拼用户输入，`../` 可以跳出目录读到本机任意文件
+    （如 ../../Windows/win.ini），必须先 abspath 归一化再比对前缀。
+    """
+    root = os.path.abspath(PHOTOS_DIR)
+    full = os.path.abspath(os.path.join(root, rel_path))
+    try:
+        inside = os.path.commonpath([root, full]) == root
+    except ValueError:  # Windows 下跨盘符会抛 ValueError
+        inside = False
+    if not inside:
+        raise HTTPException(status_code=404, detail="图片不存在")
+    return full
+
+
 # 人脸样本图片（对齐图）
 @app.get("/api/photos/{path:path}")
 def get_photo(path: str):
-    full = os.path.join(PHOTOS_DIR, path)
-    if not os.path.exists(full):
+    full = _safe_photo_path(path)
+    if not os.path.isfile(full):
         raise HTTPException(status_code=404, detail="图片不存在")
     return FileResponse(full)
 
