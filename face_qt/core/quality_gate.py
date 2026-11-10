@@ -68,23 +68,18 @@ def check_gate(faces, img_bgr):
 
 
 def _is_side_face(face):
-    """基于 5 关键点估算是否侧脸。
+    """基于 5 关键点估算是否侧脸/歪头。
 
-    用「左右眼连线中点」到「鼻尖」的水平偏移占脸宽比例判断。
-    偏移过大说明脸转了。
+    判据（考核要求，由 5 关键点推导）：
+    - 两眼连线倾角 > EYE_TILT_MAX（20°）→ 头歪
+    - 鼻尖横向偏移/脸宽 > NOSE_OFFSET_MAX（0.2）→ 侧脸
     """
-    # 关键点索引：右眼(4,5) 左眼(6,7) 鼻尖(8,9) 右嘴角(10,11) 左嘴角(12,13)
-    reye = (face[4], face[5])
-    leye = (face[6], face[7])
-    nose = (face[8], face[9])
+    tilt = fm.eye_tilt_angle(face)
+    if tilt is not None and tilt > config.EYE_TILT_MAX:
+        return True
 
-    eye_mid_x = (reye[0] + leye[0]) / 2.0
-    eye_dist = abs(reye[0] - leye[0])   # 两眼水平距离近似脸宽参考
+    offset = fm.nose_offset_ratio(face)
+    if offset is not None and offset > config.NOSE_OFFSET_MAX:
+        return True
 
-    if eye_dist < 1e-6:
-        return False
-
-    # 鼻尖相对两眼连线中点的水平偏移，占眼距的比例
-    offset_ratio = abs(nose[0] - eye_mid_x) / eye_dist
-    # 偏移超过 0.3 判定为明显侧脸
-    return offset_ratio > 0.3
+    return False

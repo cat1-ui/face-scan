@@ -60,6 +60,54 @@ def face_width(bbox):
     return float(bbox[2])
 
 
+# ---------------- 姿态（由 YuNet 5 关键点推导）----------------
+# 关键点索引（face 数组，每点占 (x, y) 两个元素）：
+#   右眼=0  左眼=1  鼻尖=2  右嘴角=3  左嘴角=4
+def _landmarks(face):
+    """从 N×15 的 face 行提取 5 关键点坐标列表 [(x,y)*5]。"""
+    pts = []
+    for i in range(5):
+        pts.append((float(face[4 + 2 * i]), float(face[5 + 2 * i])))
+    return pts
+
+
+def eye_tilt_angle(face):
+    """两眼连线倾角（度，取绝对值 0~90）。
+
+    由右眼→左眼连线与水平方向的夹角计算，反映头部左右倾斜。
+    关键点顺序固定：右眼(0)、左眼(1)。
+    返回 None 表示关键点无效（两眼重合）。
+    """
+    pts = _landmarks(face)
+    reye, leye = pts[0], pts[1]
+    dx = leye[0] - reye[0]
+    dy = leye[1] - reye[1]
+    dist = (dx * dx + dy * dy) ** 0.5
+    if dist < 1e-6:
+        return None
+    angle = abs(np.degrees(np.arctan2(dy, dx)))
+    # 归一化到 0~90（atan2 可能给 >90 的钝角，取补角）
+    if angle > 90:
+        angle = 180 - angle
+    return float(angle)
+
+
+def nose_offset_ratio(face):
+    """鼻尖横向偏移 / 脸宽 的比值（0~∞）。
+
+    用「鼻尖横坐标」相对「两眼连线中点横坐标」的偏移量，
+    除以脸宽（此处以两眼间距作为脸宽参考，因框宽含发际/下巴噪声）。
+    偏移越大说明脸转得越侧。返回 None 表示无效。
+    """
+    pts = _landmarks(face)
+    reye, leye, nose = pts[0], pts[1], pts[2]
+    face_w = abs(leye[0] - reye[0])   # 两眼间距近似脸宽
+    if face_w < 1e-6:
+        return None
+    eye_mid_x = (reye[0] + leye[0]) / 2.0
+    return float(abs(nose[0] - eye_mid_x) / face_w)
+
+
 def compute_all(img_bgr, bbox=None):
     """一次性计算所有指标。
 

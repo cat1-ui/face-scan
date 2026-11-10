@@ -11,8 +11,8 @@ MODELS_DIR = os.path.join(BASE_DIR, "models")
 DATA_DIR = os.path.join(os.path.dirname(BASE_DIR), "face_data")
 DB_PATH = os.path.join(DATA_DIR, "attendance.db")
 
-# 两个模型文件的真实文件名（与用户桌面文件保持一致）
-DET_MODEL = "face_detection_yunet_2023mar(1).onnx"
+# 两个模型文件的真实文件名
+DET_MODEL = "face_detection_yunet_2023mar.onnx"
 REC_MODEL = "face_recognition_sface_2021dec.onnx"
 
 # 一张用于验证的测试图（若存在则做真实检测）
